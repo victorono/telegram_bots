@@ -4,10 +4,11 @@
 from telegram.ext import Updater, CommandHandler
 from datetime import datetime, timedelta
 from time import mktime
-from pytz import timezone
+# from pytz import timezone
+# import pytz
+from math import floor
 
 import sqlite3
-import pytz
 
 """
 CREATE TABLE `chat_settings` (
@@ -18,6 +19,10 @@ CREATE TABLE `chat_settings` (
     PRIMARY KEY(`id`)
 );
 """
+
+EPOCH = 1389150000000
+CYCLE_LENGTH = 630000000
+CHECKPOINT_LENGTH = 18000
 
 
 def save_settings(chat_id):
@@ -58,13 +63,34 @@ def save_settings(chat_id):
             conn.close()
 
 
-def start(bot, update):
-    update.message.reply_text('Hello World!')
+def current_cycle():
+    present = datetime.now()
+    tt = datetime.timetuple(present)
+    now = mktime(tt) * 1000
+    cycle = floor((now - EPOCH) / CYCLE_LENGTH)
+    start = datetime.fromtimestamp(CHECKPOINT_LENGTH + ((EPOCH + (cycle * CYCLE_LENGTH)) / 1000))
+
+    checkpoints = []
+    for i in range(0, 35):
+        next = (start > present) and (present + timedelta(seconds=CHECKPOINT_LENGTH)) > start
+        cp = {
+            'date': start.strftime('%a %d %b'),
+            'time': start.strftime('%I:%M%p'),
+            'next': next,
+            'past': (start < present)
+        }
+        checkpoints.append(cp)
+        start = start + timedelta(seconds=CHECKPOINT_LENGTH)
+    return checkpoints
 
 
-def help(bot, update):
-    str_result = '=)'
-    update.message.reply_text(str_result)
+def next_checkpoint(cps):
+    future = [cp for cp in cps if cp['past'] is False]
+    return future[0]
+
+
+def cycle_end(cps):
+    return cps[-1]
 
 
 def settings(bot, update, args):
@@ -79,37 +105,36 @@ def settings(bot, update, args):
 
 def checkpoints(bot, update):
 
-    t0 = datetime.strptime('2015-06-24 20', '%Y-%m-%d %H').replace(tzinfo=timezone('America/Santiago'))
+    chat_id = update.message.chat.id
+
+    cps = current_cycle()
+    n = next_checkpoint(cps)
+    c = cycle_end(cps)
+    str_result = "Next checkpoint is {} <b>{}</b>.\nThis cycle ends {} <b>{}</b>.".format(n['date'], n['time'], c['date'], c['time'])
+
+    bot.sendMessage(chat_id=chat_id, text=str_result, parse_mode='HTML')
+
+
+def all_cps(bot, update):
+
+    t0 = datetime.strptime('2014-07-09 11', '%Y-%m-%d %H')
     hours_per_cycle = 175
-    hours_per_cp = 5
-    t = datetime.now().replace(tzinfo=timezone('America/Santiago'))
 
-    seconds_from_t0 = mktime(t.timetuple()) - mktime(t0.timetuple())
-    cycles_from_t0 = seconds_from_t0 // (3600 * hours_per_cycle)
-    cycle_start = t0 + timedelta(hours=cycles_from_t0 * hours_per_cycle)
-    cycle_end = cycle_start + timedelta(hours=hours_per_cycle)
+    t = datetime.utcnow()
 
-    seconds_from_cycle_start = mktime(t.timetuple()) - mktime(cycle_start.timetuple())
-    next_cp_num = (seconds_from_cycle_start // (3600 * hours_per_cp)) + 1   # +1 -- rounding up
-    next_cp = cycle_start + timedelta(hours=(next_cp_num) * hours_per_cp)
+    seconds = mktime(t.timetuple()) - mktime(t0.timetuple())
+    cycles = seconds // (3600 * hours_per_cycle)
+    start = t0 + timedelta(hours=cycles * hours_per_cycle)
+    checkpoints = map(lambda x: start + timedelta(hours=x), range(0, hours_per_cycle, 5))
 
-    rem_cycle = cycle_end - t
-    rem_hours = rem_cycle.seconds // 3600
-    rem_minutes = (timedelta(seconds=rem_cycle.seconds) - timedelta(hours=rem_hours)).seconds // 60
-
-    text_return = "CP#{!s} en: {!s}, a las: {:%H:%M} \r\nCiclo termina en {!s} dias {!s} horas {!s} min el {:%Y-%m-%d %H:%M}"
-
-    str_result = text_return.format(int(next_cp_num), ':'.join(str(next_cp - t).split(':')[:2]), next_cp, rem_cycle.days, rem_hours, rem_minutes, cycle_end)
-
-    update.message.reply_text(str_result)
+    for num, checkpoint in enumerate(checkpoints, start=1):
+        print('%2d %s' % (num, checkpoint))
 
 
 # TOKEN
 updater = Updater('291331956:AAGTv3cpqPwRy6OYNRfNMUxns982JBQIzBA')
 
 # COMANDOS
-updater.dispatcher.add_handler(CommandHandler('start', start))
-updater.dispatcher.add_handler(CommandHandler('help', help))
 updater.dispatcher.add_handler(CommandHandler('settings', settings, pass_args=True))
 updater.dispatcher.add_handler(CommandHandler('checkpoints', checkpoints))
 
