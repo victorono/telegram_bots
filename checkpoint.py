@@ -7,8 +7,13 @@ from time import mktime
 # from pytz import timezone
 # import pytz
 from math import floor
-
+import gettext
 import sqlite3
+
+gettext.bindtextdomain('bots', 'locales')
+gettext.textdomain('bots')
+
+_ = gettext.gettext
 
 """
 CREATE TABLE `chat_settings` (
@@ -37,7 +42,8 @@ def save_settings(chat_id):
         conn = sqlite3.connect('checkpoint_settings.db')
         c = conn.cursor()
 
-        query = "SELECT * FROM {tn} WHERE {idf}={my_id};".format(tn=table_name, idf=id_column, my_id=chat_id)
+        query = "SELECT * FROM {tn} WHERE {idf}={my_id};".\
+            format(tn=table_name, idf=id_column, my_id=chat_id)
         print(query)
         c.execute(query)
         chack_settings = c.fetchone()
@@ -46,14 +52,18 @@ def save_settings(chat_id):
             print('{}'.format(chack_settings))
         else:
 
-            query = "INSERT INTO {table_name} (chat_id, {timezone}, {language}) VALUES ({chat_id}, 'America/Santiago', 'es');".\
-                format(chat_id=chat_id, timezone=timezone, language=language, table_name=table_name)
+            query = "INSERT INTO {table_name} ({id_column}, {timezone}, {language}) VALUES ({chat_id}, 'America/Santiago', 'es');".\
+                format(chat_id=chat_id, timezone=timezone, language=language, table_name=table_name, id_column=id_column)
             try:
                 print(query)
                 c.execute(query)
                 conn.commit()
-            except sqlite3.IntegrityError:
-                print('chat_id already exists in PRIMARY KEY column {}'.format(id_column))
+            except sqlite3.IntegrityError as e:
+
+                error_message = 'chat_id already exists in PRIMARY KEY column {}, {}'.\
+                    format(id_column, e)
+
+                print(error_message)
 
     except sqlite3.Error as e:
         print('No se pudo conectar', e)
@@ -103,19 +113,21 @@ def settings(bot, update, args):
     update.message.reply_text(str_result)
 
 
-def checkpoints(bot, update):
+def next_cp(bot, update):
 
     chat_id = update.message.chat.id
 
     cps = current_cycle()
     n = next_checkpoint(cps)
     c = cycle_end(cps)
-    str_result = "Next checkpoint is {} <b>{}</b>.\nThis cycle ends {} <b>{}</b>.".format(n['date'], n['time'], c['date'], c['time'])
+    str_result = _("Next checkpoint is {} <b>{}</b>.\nThis cycle ends {} <b>{}</b>.".format(n['date'], n['time'], c['date'], c['time']))
 
     bot.sendMessage(chat_id=chat_id, text=str_result, parse_mode='HTML')
 
 
-def all_cps(bot, update):
+def all_checkpoints(bot, update):
+
+    chat_id = update.message.chat.id
 
     t0 = datetime.strptime('2014-07-09 11', '%Y-%m-%d %H')
     hours_per_cycle = 175
@@ -126,9 +138,14 @@ def all_cps(bot, update):
     cycles = seconds // (3600 * hours_per_cycle)
     start = t0 + timedelta(hours=cycles * hours_per_cycle)
     checkpoints = map(lambda x: start + timedelta(hours=x), range(0, hours_per_cycle, 5))
+    list_checkpoints = []
 
     for num, checkpoint in enumerate(checkpoints, start=1):
-        print('%2d %s' % (num, checkpoint))
+        list_checkpoints.append('<b>%2d</b> %s' % (num, checkpoint))
+
+    str_result = "\n".join(list_checkpoints)
+
+    bot.sendMessage(chat_id=chat_id, text=str_result, parse_mode='HTML')
 
 
 # TOKEN
@@ -136,7 +153,8 @@ updater = Updater('291331956:AAGTv3cpqPwRy6OYNRfNMUxns982JBQIzBA')
 
 # COMANDOS
 updater.dispatcher.add_handler(CommandHandler('settings', settings, pass_args=True))
-updater.dispatcher.add_handler(CommandHandler('checkpoints', checkpoints))
+updater.dispatcher.add_handler(CommandHandler('next_cp', next_cp))
+updater.dispatcher.add_handler(CommandHandler('all_checkpoints', all_checkpoints))
 
 updater.start_polling()
 updater.idle()
