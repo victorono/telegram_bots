@@ -148,6 +148,25 @@ def all_checkpoints(bot, update):
     bot.sendMessage(chat_id=chat_id, text=str_result, parse_mode='HTML')
 
 
+def get_chat_timezone(p_chat_id):
+    query = "SELECT timezone FROM chat_settings WHERE chat_id={CHATID};".format(CHATID=p_chat_id)
+
+    conn = sqlite3.connect('checkpoint_settings.db')
+    cur = conn.cursor()
+    cur.execute(query)
+    str_timezone = cur.fetchone()
+
+    str_timezone = str_timezone[0]
+    conn.commit()
+    conn.close()
+
+    return str_timezone
+
+def info(bot, update):
+    chat_id = update.message.chat.id
+    update.message.reply_text(get_chat_timezone(chat_id))
+
+
 # TOKEN
 updater = Updater('291331956:AAGTv3cpqPwRy6OYNRfNMUxns982JBQIzBA')
 
@@ -155,6 +174,7 @@ updater = Updater('291331956:AAGTv3cpqPwRy6OYNRfNMUxns982JBQIzBA')
 updater.dispatcher.add_handler(CommandHandler('settings', settings, pass_args=True))
 updater.dispatcher.add_handler(CommandHandler('next_cp', next_cp))
 updater.dispatcher.add_handler(CommandHandler('all_checkpoints', all_checkpoints))
+updater.dispatcher.add_handler(CommandHandler('info', info))
 
 updater.start_polling()
 updater.idle()
