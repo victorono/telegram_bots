@@ -74,6 +74,7 @@ def save_settings(chat_id):
 
 
 def current_cycle():
+
     present = datetime.now()
     tt = datetime.timetuple(present)
     now = mktime(tt) * 1000
@@ -81,16 +82,21 @@ def current_cycle():
     start = datetime.fromtimestamp(CHECKPOINT_LENGTH + ((EPOCH + (cycle * CYCLE_LENGTH)) / 1000))
 
     checkpoints = []
+
     for i in range(0, 35):
+
         next = (start > present) and (present + timedelta(seconds=CHECKPOINT_LENGTH)) > start
+
         cp = {
             'date': start.strftime('%a %d %b'),
             'time': start.strftime('%I:%M%p'),
             'next': next,
             'past': (start < present)
         }
+
         checkpoints.append(cp)
         start = start + timedelta(seconds=CHECKPOINT_LENGTH)
+
     return checkpoints
 
 
@@ -149,18 +155,23 @@ def all_checkpoints(bot, update):
 
 
 def get_chat_timezone(p_chat_id):
-    query = "SELECT timezone FROM chat_settings WHERE chat_id={CHATID};".format(CHATID=p_chat_id)
+
+    query = "SELECT timezone FROM chat_settings WHERE chat_id={chat_id};".format(chat_id=p_chat_id)
 
     conn = sqlite3.connect('checkpoint_settings.db')
     cur = conn.cursor()
     cur.execute(query)
-    str_timezone = cur.fetchone()
-
-    str_timezone = str_timezone[0]
+    result = cur.fetchone()
     conn.commit()
     conn.close()
 
+    str_timezone = "America/Santiago"
+
+    if result:
+        str_timezone = result[0]
+
     return str_timezone
+
 
 def info(bot, update):
     chat_id = update.message.chat.id
